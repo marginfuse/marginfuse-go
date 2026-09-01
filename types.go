@@ -2,6 +2,18 @@ package marginfuse
 
 import "time"
 
+// ContractVersion is the version of the shared SDK contract this build was
+// verified against.
+//
+// Module versions differ per language, because each tracks its own breaking
+// changes: a rename in Python must not tell Go users something broke. What
+// makes the SDKs interchangeable is this, not the module version. Two SDKs
+// reporting the same contract version have passed the same scenarios and the
+// same vectors.
+//
+// See github.com/marginfuse/sdk-contract.
+const ContractVersion = 1
+
 // Outcome is what happened to a provider call.
 type Outcome string
 
