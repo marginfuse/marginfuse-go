@@ -1,0 +1,54 @@
+# There is no release workflow here on purpose: in Go, pushing a tag IS
+# publishing, and the module proxy caches tags permanently. So everything that
+# would gate a release runs here, on every push, and a tag is only ever created
+# from a commit this has already passed.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    name: go ${{ matrix.go }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        go: ["1.21", "1.22", "1.23", "1.24"]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ matrix.go }}
+
+      - name: Formatting
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Tests, plus the shared gateway vectors
+        run: go test -race ./...
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Conformance
+        run: |
+          npm --prefix contract/harness install
+          npm --prefix contract/harness run conformance go
