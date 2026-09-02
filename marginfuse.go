@@ -28,7 +28,7 @@ const (
 	defaultBaseURL = "https://api.marginfuse.com"
 	defaultTimeout = 1500 * time.Millisecond
 	trackRetries   = 3
-	userAgent      = "marginfuse-go/0.1.0"
+	userAgent      = "marginfuse-go/" + Version
 )
 
 // Config configures a Client. Every field except APIKey has a usable zero

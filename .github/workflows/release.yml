@@ -1,0 +1,43 @@
+# Validates a released tag.
+#
+# There is nothing to upload: Go publishes by tag and proxy.golang.org fetches
+# straight from this repository. That is also why this exists. The proxy caches
+# a version permanently the first time anyone asks for it and a published
+# version cannot be withdrawn or replaced, so a tag that disagrees with the
+# code stays wrong forever. This runs the full suite against the exact commit
+# the tag names, and fails loudly while the mistake is still one tag old.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.27"
+
+      - name: Tests, including that the tag matches the version the SDK reports
+        env:
+          MARGINFUSE_RELEASE_TAG: ${{ github.ref_name }}
+        run: go test ./...
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Conformance
+        run: |
+          npm --prefix contract/harness install
+          npm --prefix contract/harness run conformance go
