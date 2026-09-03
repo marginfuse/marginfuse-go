@@ -35,18 +35,24 @@ type scenario struct {
 
 // The scenarios speak the wire's camelCase.
 type params struct {
-	CustomerID     string           `json:"customerId"`
-	Feature        string           `json:"feature"`
-	Provider       string           `json:"provider"`
-	Model          string           `json:"model"`
-	RequestedModel string           `json:"requestedModel"`
-	EventID        string           `json:"eventId"`
-	CostUSD        string           `json:"costUsd"`
-	DecisionID     string           `json:"decisionId"`
-	Acknowledgment string           `json:"acknowledgment"`
-	Outcome        string           `json:"outcome"`
-	Usage          marginfuse.Usage `json:"usage"`
-	ExpectedUsage  marginfuse.Usage `json:"expectedUsage"`
+	CustomerID     string            `json:"customerId"`
+	Plan           string            `json:"plan"`
+	ClearPlan      bool              `json:"clearPlan"`
+	PeriodStart    string            `json:"periodStart"`
+	Name           string            `json:"name"`
+	Email          string            `json:"email"`
+	Metadata       map[string]string `json:"metadata"`
+	Feature        string            `json:"feature"`
+	Provider       string            `json:"provider"`
+	Model          string            `json:"model"`
+	RequestedModel string            `json:"requestedModel"`
+	EventID        string            `json:"eventId"`
+	CostUSD        string            `json:"costUsd"`
+	DecisionID     string            `json:"decisionId"`
+	Acknowledgment string            `json:"acknowledgment"`
+	Outcome        string            `json:"outcome"`
+	Usage          marginfuse.Usage  `json:"usage"`
+	ExpectedUsage  marginfuse.Usage  `json:"expectedUsage"`
 }
 
 type report struct {
@@ -93,6 +99,7 @@ func main() {
 	case "decide":
 		d := mf.Decide(ctx, marginfuse.DecideParams{
 			CustomerID:    p.CustomerID,
+			Plan:          p.Plan,
 			Feature:       p.Feature,
 			Provider:      p.Provider,
 			Model:         p.Model,
@@ -104,6 +111,7 @@ func main() {
 		mf.Track(marginfuse.TrackParams{
 			EventID:        p.EventID,
 			CustomerID:     p.CustomerID,
+			Plan:           p.Plan,
 			Feature:        p.Feature,
 			Provider:       p.Provider,
 			Model:          p.Model,
@@ -117,10 +125,41 @@ func main() {
 	case "acknowledge":
 		mf.Acknowledge(p.DecisionID, marginfuse.Acknowledgment(p.Acknowledgment))
 
+	case "identify":
+		// The one call that returns an error instead of failing open: a wrong
+		// plan is a wrong margin, so the application has to be able to see it.
+		ip := marginfuse.IdentifyParams{
+			CustomerID: p.CustomerID,
+			Plan:       p.Plan,
+			ClearPlan:  p.ClearPlan,
+			Name:       p.Name,
+			Email:      p.Email,
+			Metadata:   p.Metadata,
+		}
+		if p.PeriodStart != "" {
+			when, err := time.Parse(time.RFC3339, p.PeriodStart)
+			if err != nil {
+				fail(err)
+			}
+			ip.PeriodStart = when
+		}
+		id, idErr := mf.Identify(ctx, ip)
+		result := map[string]any{"ok": idErr == nil}
+		if idErr != nil {
+			result["error"] = idErr.Error()
+		} else {
+			result["customerId"] = id.CustomerID
+			result["plan"] = id.Plan
+			result["periodStart"] = id.PeriodStart
+			result["periodEnd"] = id.PeriodEnd
+		}
+		out.Result = result
+
 	case "guard":
 		outcome, runErr := mf.Guard(ctx,
 			marginfuse.DecideParams{
 				CustomerID:    p.CustomerID,
+				Plan:          p.Plan,
 				Feature:       p.Feature,
 				Provider:      p.Provider,
 				Model:         p.Model,

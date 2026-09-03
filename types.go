@@ -75,10 +75,14 @@ type Decision struct {
 }
 
 // DecideParams asks about the call you are about to make.
+//
+// Plan is the key of a plan you declared in MarginFuse. It is a hint: a key
+// that does not resolve is ignored rather than failing the decision.
 type DecideParams struct {
 	CustomerID    string
 	Provider      string
 	Model         string
+	Plan          string
 	Feature       string
 	ExpectedUsage Usage
 }
@@ -92,6 +96,7 @@ type TrackParams struct {
 	CustomerID      string
 	Provider        string
 	Model           string
+	Plan            string
 	Feature         string
 	RequestedModel  string
 	Usage           Usage
@@ -112,6 +117,32 @@ type ProviderCall struct {
 	Usage   Usage
 	CostUSD string
 	Outcome Outcome
+}
+
+// IdentifyParams says who a customer is and what plan they pay for.
+//
+// Plan is the key of a plan you declared in MarginFuse Settings, not a Stripe
+// price id. Leave it empty to change nothing about the plan; set ClearPlan to
+// take the customer off plans entirely. PeriodStart backdates the cycle for a
+// customer who has been paying since an earlier date.
+type IdentifyParams struct {
+	CustomerID  string
+	Plan        string
+	ClearPlan   bool
+	PeriodStart time.Time
+	Name        string
+	Email       string
+	Metadata    map[string]string
+}
+
+// Identity is what MarginFuse recorded for a customer.
+//
+// Plan is empty when the customer is on none.
+type Identity struct {
+	CustomerID  string `json:"customerId"`
+	Plan        string `json:"plan"`
+	PeriodStart string `json:"periodStart,omitempty"`
+	PeriodEnd   string `json:"periodEnd,omitempty"`
 }
 
 // GuardKind is what Guard did.

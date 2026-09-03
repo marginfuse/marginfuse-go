@@ -27,8 +27,11 @@ import (
 const (
 	defaultBaseURL = "https://api.marginfuse.com"
 	defaultTimeout = 1500 * time.Millisecond
-	trackRetries   = 3
-	userAgent      = "marginfuse-go/" + Version
+	// Identify is not on the request hot path - it runs at sign-in - so it
+	// gets room to answer rather than the decision budget.
+	identifyTimeout = 5 * time.Second
+	trackRetries    = 3
+	userAgent       = "marginfuse-go/" + Version
 )
 
 // Config configures a Client. Every field except APIKey has a usable zero
@@ -116,6 +119,9 @@ func (c *Client) Decide(ctx context.Context, p DecideParams) Decision {
 		"provider":   p.Provider,
 		"model":      p.Model,
 	}
+	if p.Plan != "" {
+		body["plan"] = p.Plan
+	}
 	if p.Feature != "" {
 		body["feature"] = p.Feature
 	}
@@ -184,6 +190,7 @@ func (c *Client) Track(p TrackParams) {
 		"outcome":    string(outcome),
 	}
 	for key, value := range map[string]string{
+		"plan":            p.Plan,
 		"feature":         p.Feature,
 		"requestedModel":  p.RequestedModel,
 		"costUsd":         p.CostUSD,
@@ -226,6 +233,64 @@ func (c *Client) Track(p TrackParams) {
 			c.report(last, "track")
 		}
 	})
+}
+
+// Identify tells MarginFuse who a customer is and what plan they are on.
+//
+// Plan is the key of a plan you declared in MarginFuse Settings, not a Stripe
+// price id. MarginFuse derives that customer's revenue from the plan's price
+// for every cycle, which is what makes margin per customer and margin policies
+// work with no revenue source connected. Those figures are labeled as a
+// declared price wherever they appear, because nobody confirmed collection.
+//
+// Safe to call on every sign-in: sending the plan the customer is already on
+// changes nothing. Sending a different one ends the current cycle at that
+// moment and prorates what accrued.
+//
+// This is the one call that returns an error, and the only one that should.
+// Decide fails open and Track retries, because both have a safe default;
+// "I could not record what this customer pays" has none, and a wrong plan is a
+// wrong margin. The error also goes to Config.OnError.
+func (c *Client) Identify(ctx context.Context, p IdentifyParams) (Identity, error) {
+	body := map[string]any{"customerId": p.CustomerID}
+	if p.Plan != "" {
+		body["plan"] = p.Plan
+	}
+	if p.ClearPlan {
+		body["clearPlan"] = true
+	}
+	if !p.PeriodStart.IsZero() {
+		body["periodStart"] = p.PeriodStart.UTC().Format(time.RFC3339Nano)
+	}
+	for key, value := range map[string]string{"name": p.Name, "email": p.Email} {
+		if value != "" {
+			body[key] = value
+		}
+	}
+	if len(p.Metadata) > 0 {
+		body["metadata"] = p.Metadata
+	}
+
+	reqCtx, cancel := context.WithTimeout(ctx, identifyTimeout)
+	defer cancel()
+
+	status, raw, err := c.post(reqCtx, "/v1/identify", body)
+	if err != nil {
+		c.report(err, "identify")
+		return Identity{}, err
+	}
+	if status < 200 || status >= 300 {
+		err := fmt.Errorf("identify: HTTP %d %s", status, snippet(raw))
+		c.report(err, "identify")
+		return Identity{}, err
+	}
+	var id Identity
+	if err := json.Unmarshal(raw, &id); err != nil {
+		err = fmt.Errorf("identify: %w", err)
+		c.report(err, "identify")
+		return Identity{}, err
+	}
+	return id, nil
 }
 
 // TrackAndWait is Track for jobs and scripts that must not exit early.

@@ -108,6 +108,38 @@ There is no failure a caller should branch on. A decision that times out or
 errors is an *allow* with `Degraded` set, because MarginFuse being unreachable
 must never become your outage. Transport failures go to `Config.OnError`.
 
+## Tell MarginFuse what a customer pays
+
+Margin needs a revenue side. With Stripe connected it comes from there. Without
+one, you declare your plans in MarginFuse and say which plan each customer is
+on:
+
+```go
+id, err := mf.Identify(ctx, marginfuse.IdentifyParams{
+    CustomerID: "user_8x2m91",
+    Plan:       "pro", // the key of a plan you declared in Settings
+    Name:       "Acme Studio",
+    Metadata:   map[string]string{"tier": "legacy"},
+})
+if err != nil {
+    log.Printf("marginfuse identify: %v", err)
+}
+```
+
+Safe to call on every sign-in: sending the plan the customer is already on
+changes nothing. Sending a different one ends the current cycle and prorates
+what accrued. `PeriodStart` backdates the cycle for a customer who has been
+paying since an earlier date; `ClearPlan` takes them off plans.
+
+This is the one method that returns an error, and the only one that should.
+`Decide` fails open and `Track` retries, because both have a safe default;
+"I could not record what this customer pays" has none, and a wrong plan is a
+wrong margin.
+
+`DecideParams` and `TrackParams` also carry a `Plan`, so it can ride along with
+usage rather than needing its own call. There it is a hint: a key that does not
+resolve is ignored rather than failing your event.
+
 ## OpenRouter and other gateways
 
 Gateways report the real cost of every call. Forward it and your figures are
