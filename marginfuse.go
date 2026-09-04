@@ -349,9 +349,18 @@ func (c *Client) Guard(
 		return GuardOutcome{Kind: GuardTopupRequired, Decision: decision}, nil
 	}
 
+	// What actually ran. A downgrade can cross vendors, so the provider moves
+	// with the model: reporting the requested one would price the call from
+	// the wrong catalog and credit the saving to the wrong vendor. The
+	// decision defaults its provider to the requested one, so an allow is
+	// unchanged.
 	modelUsed := p.Model
+	providerUsed := p.Provider
+	ack := AckProceededAsRequested
 	if decision.Action == ActionDowngrade {
 		modelUsed = decision.Model
+		providerUsed = decision.Provider
+		ack = AckUsedDowngradeModel
 	}
 
 	call, err := run(ctx, decision)
@@ -359,14 +368,17 @@ func (c *Client) Guard(
 		c.Track(TrackParams{
 			CustomerID:     p.CustomerID,
 			Feature:        p.Feature,
-			Provider:       p.Provider,
+			Provider:       providerUsed,
 			Model:          modelUsed,
 			RequestedModel: p.Model,
 			Outcome:        OutcomeProviderError,
 			DecisionID:     decision.ID,
 		})
 		if decision.ID != "" {
-			c.Acknowledge(decision.ID, AckProceededAsRequested)
+			// A failed call still applied the downgrade. Saying otherwise
+			// would report the policy as unenforced every time the provider
+			// happened to fail.
+			c.Acknowledge(decision.ID, ack)
 		}
 		return GuardOutcome{Kind: GuardCompleted, Decision: decision}, err
 	}
@@ -378,7 +390,7 @@ func (c *Client) Guard(
 	c.Track(TrackParams{
 		CustomerID:     p.CustomerID,
 		Feature:        p.Feature,
-		Provider:       p.Provider,
+		Provider:       providerUsed,
 		Model:          modelUsed,
 		RequestedModel: p.Model,
 		Usage:          call.Usage,
@@ -387,10 +399,6 @@ func (c *Client) Guard(
 		DecisionID:     decision.ID,
 	})
 	if decision.ID != "" {
-		ack := AckProceededAsRequested
-		if decision.Action == ActionDowngrade {
-			ack = AckUsedDowngradeModel
-		}
 		c.Acknowledge(decision.ID, ack)
 	}
 	return GuardOutcome{Kind: GuardCompleted, Decision: decision}, nil

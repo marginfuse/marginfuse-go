@@ -12,7 +12,7 @@ import "time"
 // same vectors.
 //
 // See github.com/marginfuse/sdk-contract.
-const ContractVersion = 1
+const ContractVersion = 2
 
 // Outcome is what happened to a provider call.
 type Outcome string

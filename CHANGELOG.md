@@ -4,6 +4,28 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0]
+
+### Fixed
+
+- A downgrade that crosses vendors is reported against the vendor that actually
+  ran it. `guard()` already ran the model the server chose, but the usage event
+  still named the requested provider, so the call was priced from the wrong
+  catalog and the saving the downgrade exists to prove was computed against the
+  wrong basis. An `allow` is unchanged, because the decision already defaults
+  its provider to the requested one.
+- A downgrade whose provider call then fails is acknowledged as
+  `used_downgrade_model` rather than `proceeded_as_requested`. The cheaper model
+  did run; what failed came after. Reporting otherwise told reconciliation the
+  policy never applied, which skewed realized-savings attribution on the error
+  path.
+
+### Changed
+
+- Pinned contract v2, whose new scenarios cover both corrections above and add
+  a privacy check that hands the SDK content-bearing fields and scans the bytes
+  that actually leave the process.
+
 ## [0.2.0]
 
 ### Added

@@ -9,4 +9,4 @@ package marginfuse
 //
 // The Node SDK shipped two releases reporting 0.1.0 because it had a literal
 // like this one with nothing checking it.
-const Version = "0.2.0"
+const Version = "0.3.0"
