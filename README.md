@@ -110,9 +110,11 @@ must never become your outage. Transport failures go to `Config.OnError`.
 
 ## Tell MarginFuse what a customer pays
 
-Margin needs a revenue side. With Stripe connected it comes from there. Without
-one, you declare your plans in MarginFuse and say which plan each customer is
-on:
+Margin needs a revenue side: Stripe for web billing, RevenueCat for App Store
+and Google Play proceeds, or declared plan prices. RevenueCat joins by App User
+ID; use that same ID in your events. Without a billing connection, declare your
+plans in MarginFuse and say which plan each customer is on. Declared revenue
+is unverified and does not confirm payment:
 
 ```go
 id, err := mf.Identify(ctx, marginfuse.IdentifyParams{
@@ -190,7 +192,7 @@ they cannot become your outage; without the hook they are silent.
 Everything, and nothing else:
 
 ```
-eventId  customerId  feature  provider  model  requestedModel
+eventId  customerId  feature  provider  model  requestedModel  plan
 usage { inputTokens, outputTokens, cachedInputTokens,
         cacheCreationTokens, images, audioSeconds }
 costUsd  occurredAt  outcome  decisionId  retryOfEventId  correctsEventId
